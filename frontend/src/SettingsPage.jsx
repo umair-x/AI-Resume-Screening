@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "https://ai-resume-screening-production-96a5.up.railway.app";
 
 
 function SettingsPage({
