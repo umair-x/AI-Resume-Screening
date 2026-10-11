@@ -1,1 +1,11 @@
+fastapi
 uvicorn[standard]
+python-multipart
+python-dotenv
+SQLAlchemy
+PyMySQL
+PyJWT
+pwdlib[argon2]
+PyMuPDF
+scikit-learn
+sentence-transformers
