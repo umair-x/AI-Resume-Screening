@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -6,22 +8,38 @@ from sentence_transformers import SentenceTransformer
 
 # ==========================================
 # LOAD AI MODEL
+# Model is loaded only once
 # ==========================================
 
-ai_model = None
-
-
+@lru_cache(maxsize=1)
 def get_ai_model():
 
-    global ai_model
+    model = SentenceTransformer(
+        "all-MiniLM-L6-v2"
+    )
 
-    if ai_model is None:
+    return model
 
-        ai_model = SentenceTransformer(
-            "all-MiniLM-L6-v2"
-        )
 
-    return ai_model
+# ==========================================
+# CACHE JOB DESCRIPTION EMBEDDING
+# Same JD is encoded only once
+# ==========================================
+
+@lru_cache(maxsize=100)
+def get_job_embedding(
+    job_description
+):
+
+    model = get_ai_model()
+
+    embedding = model.encode(
+        job_description,
+        normalize_embeddings=True,
+        show_progress_bar=False
+    )
+
+    return embedding
 
 
 # ==========================================
@@ -64,6 +82,7 @@ def calculate_text_similarity(
 
 # ==========================================
 # AI SEMANTIC SIMILARITY
+# Optimized version
 # ==========================================
 
 def calculate_ai_similarity(
@@ -75,27 +94,30 @@ def calculate_ai_similarity(
         not resume_text.strip()
         or not job_description.strip()
     ):
-        return 0.0
 
+        return 0.0
 
     try:
 
         model = get_ai_model()
 
-
-        embeddings = model.encode(
-            [
-                job_description,
-                resume_text
-            ],
-            normalize_embeddings=True
+        # Job Description embedding is cached
+        job_embedding = get_job_embedding(
+            job_description
         )
 
+        # Only resume is encoded each time
+        resume_embedding = model.encode(
+            resume_text,
+            normalize_embeddings=True,
+            show_progress_bar=False
+        )
 
         similarity = float(
-            embeddings[0] @ embeddings[1]
+            job_embedding
+            @
+            resume_embedding
         )
-
 
         similarity = max(
             0.0,
@@ -105,12 +127,10 @@ def calculate_ai_similarity(
             )
         )
 
-
         return round(
             similarity * 100,
             2
         )
-
 
     except Exception as error:
 
@@ -143,7 +163,6 @@ def calculate_skill_match(
             []
         )
 
-
     resume_set = set(
         resume_skills
     )
@@ -152,13 +171,11 @@ def calculate_skill_match(
         job_skills
     )
 
-
     matched_skills = sorted(
         resume_set.intersection(
             job_set
         )
     )
-
 
     missing_skills = sorted(
         job_set.difference(
@@ -166,13 +183,11 @@ def calculate_skill_match(
         )
     )
 
-
     score = (
         len(matched_skills)
         /
         len(job_set)
     ) * 100
-
 
     return (
         round(score, 2),
@@ -191,7 +206,6 @@ def calculate_section_score(
 ):
 
     text = resume_text.lower()
-
 
     sections = [
 
@@ -219,9 +233,7 @@ def calculate_section_score(
 
     ]
 
-
     found_sections = 0
-
 
     for section_names in sections:
 
@@ -231,7 +243,6 @@ def calculate_section_score(
         ):
 
             found_sections += 1
-
 
     # 4 sections = 10 marks
     return (
@@ -252,16 +263,13 @@ def calculate_contact_score(
 
     score = 0.0
 
-
     if candidate.get("email"):
 
         score += 2.5
 
-
     if candidate.get("phone"):
 
         score += 2.5
-
 
     return score
 
@@ -279,26 +287,21 @@ def calculate_readability_score(
         resume_text.split()
     )
 
-
     if 250 <= word_count <= 1200:
 
         return 5.0
-
 
     if 150 <= word_count < 250:
 
         return 4.0
 
-
     if 80 <= word_count < 150:
 
         return 2.5
 
-
     if word_count > 1200:
 
         return 3.0
-
 
     return 1.0
 
@@ -324,11 +327,9 @@ def calculate_ats_score(
         job_description
     )
 
-
     ai_contribution = (
         ai_score * 0.50
     )
-
 
     # --------------------------------------
     # 2. Required Skill Match
@@ -338,7 +339,6 @@ def calculate_ats_score(
     skill_contribution = (
         skill_match_score * 0.30
     )
-
 
     # --------------------------------------
     # 3. Resume Sections
@@ -351,7 +351,6 @@ def calculate_ats_score(
         )
     )
 
-
     # --------------------------------------
     # 4. Contact Information
     # Maximum = 5
@@ -363,7 +362,6 @@ def calculate_ats_score(
         )
     )
 
-
     # --------------------------------------
     # 5. Readability
     # Maximum = 5
@@ -374,7 +372,6 @@ def calculate_ats_score(
             resume_text
         )
     )
-
 
     final_ats_score = (
 
@@ -390,7 +387,6 @@ def calculate_ats_score(
 
     )
 
-
     final_ats_score = max(
         0,
         min(
@@ -398,7 +394,6 @@ def calculate_ats_score(
             100
         )
     )
-
 
     return (
         round(
@@ -421,16 +416,13 @@ def get_recommendation(
 
         return "Strong Match"
 
-
     elif score >= 50:
 
         return "Good Match"
 
-
     elif score >= 30:
 
         return "Partial Match"
-
 
     else:
 
@@ -452,7 +444,6 @@ def screen_candidate(
         candidate["skills"]
     )
 
-
     (
         skill_score,
         matched_skills,
@@ -462,12 +453,10 @@ def screen_candidate(
         job_skills
     )
 
-
     text_score = calculate_text_similarity(
         resume_text,
         job_description
     )
-
 
     # ======================================
     # MATCH SCORE
@@ -491,12 +480,10 @@ def screen_candidate(
             text_score
         )
 
-
     final_match_score = round(
         final_match_score,
         2
     )
-
 
     # ======================================
     # AI ATS SCORE
@@ -517,13 +504,11 @@ def screen_candidate(
 
     )
 
-
     recommendation = (
         get_recommendation(
             final_match_score
         )
     )
-
 
     return {
 
